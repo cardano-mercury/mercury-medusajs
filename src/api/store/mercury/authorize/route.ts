@@ -1,5 +1,5 @@
 import {MedusaRequest, MedusaResponse} from "@medusajs/framework/http";
-import {processPaymentWorkflow} from "@medusajs/medusa/core-flows"
+import {authorizePaymentSessionStep, processPaymentWorkflow} from "@medusajs/medusa/core-flows"
 import {ContainerRegistrationKeys} from "@medusajs/framework/utils";
 import {Modules} from "@medusajs/framework/utils"
 
@@ -35,21 +35,27 @@ export const POST = async (
             }
         });
 
-        const payment = await processPaymentWorkflow(req.scope)
-            .run({
-                input: {
-                    action: "authorized",
-                    data: {
-                        session_id: id,
-                        amount: amount,
-                    }
-                }
-            })
+        const payment = await paymentModuleService.authorizePaymentSession(
+            id,
+            {} // The context can be empty since data is retrieved from the payment-session object.
+        )
+
+        // const payment = await processPaymentWorkflow(req.scope)
+        //     .run({
+        //         input: {
+        //             action: "authorized",
+        //             data: {
+        //                 session_id: id,
+        //                 amount: amount,
+        //             }
+        //         }
+        //     })
 
         res.status(200).json({
             success: true,
             message: `Payment authorized`,
         })
+
     } catch (e) {
         logger.error(`Could not update the payment session: ${e.message}`);
         res.status(400).json({

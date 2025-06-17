@@ -6,8 +6,9 @@ import {
     PaymentProviderError,
     CreatePaymentProviderSession,
     WebhookActionResult,
+    UpdatePaymentProviderSession,
 } from "@medusajs/framework/types";
-import {ProviderWebhookPayload} from "@medusajs/types";
+import {BigNumberInput, ProviderWebhookPayload, UpdatePaymentInput} from "@medusajs/types";
 import {Fixer} from "../../modules/mercury/lib/fixer";
 import {Pricefeeder} from "../../modules/mercury/lib/pricefeeder";
 
@@ -55,49 +56,46 @@ class MercuryProviderService extends AbstractPaymentProvider<Options> {
         // TODO: Add more granular error checking of options here
     }
 
-    async capturePayment(input: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse["data"]> {
+    async capturePayment(paymentData: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse["data"]> {
         this.logger_.debug("Capturing payment!");
-        this.logger_.debug(JSON.stringify(input));
+        this.logger_.debug(JSON.stringify(paymentData));
 
         return {
-            data: {
-                id: input.id
-            },
+            data: paymentData.data,
             status: "captured"
         }
     }
 
-    async authorizePayment(input: Record<string, unknown>): Promise<PaymentProviderError | {
+    async authorizePayment(paymentSessionData: Record<string, unknown>, context: Record<string, unknown>): Promise<PaymentProviderError | {
         status: PaymentSessionStatus
         data: PaymentProviderSessionResponse["data"]
     }> {
         this.logger_.debug("Authorizing payment!");
-        this.logger_.debug(JSON.stringify(input));
+        this.logger_.debug(JSON.stringify(paymentSessionData));
 
         return {
             data: {
-                id: input.id,
-                transaction_hash: input.txHash,
+                transaction_hash: paymentSessionData["data"]?.["transaction_hash"], // Access fields from the payment-session data object provided when payment-session was initiated or updated.
             },
             status: "authorized"
         }
     }
 
-    async cancelPayment(input: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse["data"]> {
+    async cancelPayment(paymentData: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse["data"]> {
         this.logger_.debug("Cancel payment!");
-        this.logger_.debug(JSON.stringify(input));
+        this.logger_.debug(JSON.stringify(paymentData));
 
         return {
-            id: input.id
+            id: paymentData.id
         }
     }
 
-    async initiatePayment(input: CreatePaymentProviderSession): Promise<PaymentProviderError | PaymentProviderSessionResponse> {
+    async initiatePayment(context: CreatePaymentProviderSession): Promise<PaymentProviderError | PaymentProviderSessionResponse> {
         const {
             amount,
             currency_code,
             context: customerDetails
-        } = input
+        } = context
 
         const rate_response = await fetch(`${baseUrl}/mercury/rate`, {
             method: "POST",
@@ -134,55 +132,57 @@ class MercuryProviderService extends AbstractPaymentProvider<Options> {
         }
     }
 
-    async deletePayment(input: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse["data"]> {
+    async deletePayment(paymentSessionData: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse["data"]> {
         this.logger_.debug("Delete payment!");
-        this.logger_.debug(JSON.stringify(input));
+        this.logger_.debug(JSON.stringify(paymentSessionData));
 
         return {
-            input
+            paymentSessionData
         }
     }
 
-    async getPaymentStatus(input: Record<string, unknown>): Promise<PaymentSessionStatus> {
+    async getPaymentStatus(paymentSessionData: Record<string, unknown>): Promise<PaymentSessionStatus> {
         this.logger_.debug("Getting payment status!");
-        this.logger_.debug(JSON.stringify(input));
+        this.logger_.debug(JSON.stringify(paymentSessionData));
 
         return "pending";
     }
 
-    async refundPayment(input: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse> {
+    async refundPayment(paymentData: Record<string, unknown>, refundAmount: BigNumberInput): Promise<PaymentProviderError | PaymentProviderSessionResponse> {
         this.logger_.debug("Refund payment!");
-        this.logger_.debug(JSON.stringify(input));
+        this.logger_.debug(JSON.stringify(paymentData));
 
         return {
             data: {
-                id: input.id,
+                id: paymentData.id,
             }
         }
     }
 
-    async retrievePayment(input: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse["data"]> {
+    async retrievePayment(paymentSessionData: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse["data"]> {
         this.logger_.debug("Retrieve payment status!");
-        this.logger_.debug(JSON.stringify(input));
+        this.logger_.debug(JSON.stringify(paymentSessionData));
 
         return {
-            id: input.id,
+            id: paymentSessionData.id,
         }
     }
 
-    async updatePayment(input: Record<string, unknown>): Promise<PaymentProviderError | PaymentProviderSessionResponse> {
+    async updatePayment(context: UpdatePaymentProviderSession): Promise<PaymentProviderError | PaymentProviderSessionResponse> {
         this.logger_.debug("Update payment!");
-        this.logger_.debug(JSON.stringify(input));
+        this.logger_.debug(JSON.stringify(context));
 
-        return {data: {}}
+        return {
+            data: context.data // Return same data for now, instead of returning empty object which removes the data.
+        }
     }
 
-    async getWebhookActionAndData(payload: ProviderWebhookPayload["payload"]): Promise<WebhookActionResult> {
+    async getWebhookActionAndData(data: ProviderWebhookPayload["payload"]): Promise<WebhookActionResult> {
         return {
             action: "authorized",
             data: {
-                session_id: (payload.data.metadata as Record<string, any>).session_id,
-                amount: new BigNumber(payload.data.amount as number)
+                session_id: (data.data.metadata as Record<string, any>).session_id,
+                amount: new BigNumber(data.data.amount as number)
             }
         }
     }
